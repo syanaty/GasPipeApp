@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+<meta charset="UTF-8">
+<title>محاسبه‌گر سایز لوله گاز</title>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+body { font-family: 'Vazirmatn', Tahoma, sans-serif; direction: rtl; background:#f0f4f8; padding:20px; }
+.container { max-width:980px; margin:auto; background:#fff; border-radius:12px; padding:20px; box-shadow:0 6px 18px rgba(0,0,0,0.06); }
+.header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.header .title { font-size:1.3rem; font-weight:600; text-align:right; flex:1; }
+.header .logo-wrap img { max-height:180px; width:auto; }
+label,input,select{ display:block; width:100%; margin-bottom:10px; font-size:0.98rem; }
+select,input{ padding:8px; border-radius:8px; border:1px solid #ccc; box-sizing:border-box; }
+.formula{ background:#f2f2f2; border:1px dashed #777; padding:10px; margin-top:14px; font-family:monospace; white-space:pre-wrap; display:none; }
+.result{ background:#eaf4ff; padding:14px; border-radius:8px; margin-top:14px; line-height:1.6; display:none; }
+button{ padding:10px 16px; border-radius:8px; border:none; cursor:pointer; color:#fff; font-size:0.98rem; }
+#calcButton{ background:#1976d2; } #printButton{ background:#0b5ea8; margin-inline-start:8px; } #pdfButton{ background:#2e7d32; margin-inline-start:8px; }
+#pipeImage{ display:block; max-width:320px; width:100%; margin-top:8px; border-radius:8px; }
+.required-star{ color:red; font-weight:bold; font-size:1.2em; display:inline-block; margin-left:4px; vertical-align:middle; }
+.footer{ margin-top:18px; color:#666; text-align:center; font-size:0.92rem; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="logo-wrap"><img src="images/logo.jpg" alt="logo" onerror="this.style.display='none'"></div>
+    <div class="title">محاسبه‌گر سایز لوله گاز برای فشار 2 تا 60 پوند بر اینچ مربع</div>
+  </div>
+
+  <label>نام پروژه</label>
+  <input id="projectName" placeholder="مثلاً ساختمان اداری">
+
+  <label>نام مهندس طراح</label>
+  <input id="engineerName" placeholder="مثلاً فرزاد صیانتی">
+
+  <label>نام خط</label>
+  <input id="lineName" placeholder="مثلاً A-B">
+
+  <label><span class="required-star">*</span> دبی (m³/h)</label>
+  <input id="flow" type="number" step="any" placeholder="مثلاً 25">
+
+  <label><span class="required-star">*</span> طول لوله (m)</label>
+  <input id="length" type="number" step="any" placeholder="مثلاً 120">
+
+  <label><span class="required-star">*</span> نوع لوله</label>
+  <select id="pipeType">
+    <option value="">-- انتخاب کنید --</option>
+    <option value="steel">لوله فولادی</option>
+    <option value="polyethylene">پلی‌اتیلن</option>
+  </select>
+
+  <div id="polySelect" style="display:none">
+    <label><span class="required-star">*</span> نوع پلی‌اتیلن</label>
+    <select id="peType">
+      <option value="PE100_SDR11">PE100 - SDR11</option>
+      <option value="PE100_SDR13_6">PE100 - SDR13.6</option>
+      <option value="PE80">PE80</option>
+    </select>
+  </div>
+
+  <label><span class="required-star">*</span> سایز لوله</label>
+  <select id="pipeSize"></select>
+
+  <img id="pipeImage" src="" alt="تصویر لوله" style="display:none">
+
+  <label><span class="required-star">*</span> فشار خروجی ایستگاه (Gauge, PSI)</label>
+  <input id="stationPressure" type="number" step="0.1" placeholder="مثلاً 60">
+
+  <label><span class="required-star">*</span> فشار ورودی خط (Gauge, PSI)</label>
+  <input id="inletPressure" type="number" step="0.1" placeholder="مثلاً 58">
+
+  <div style="margin-top:12px; display:flex; gap:8px;">
+    <button id="calcButton">محاسبه</button>
+    <button id="printButton">🖨 چاپ گزارش</button>
+    <button id="pdfButton">📄 دانلود PDF (فارسی)</button>
+  </div>
+
+  <div id="formula" class="formula"></div>
+  <div id="results" class="result"></div>
+  <div class="footer">کمیسیون تخصصی مکانیک سازمان نظام مهندسی ساختمان استان گیلان</div>
+</div>
+
+<script>
+// داده‌ها
+const steelSizes=["3/4\"","1\"","1 1/4\"","1 1/2\"","2\"","2 1/2\"","3\"","4\"","6\"","8\"","10\"","12\""];
+const steelDiameters=[2.09,2.66,3.5,4.09,5.25,6.5,8.01,10.55,15.95,20.97,26.19,31.11];
+const peSizes={PE100_SDR11:[25,32,63,90],PE100_SDR13_6:[63,90,110,125,160,200,225],PE80:[25,32,63,90,110,125,160,200,225]};
+const peDiameters={PE100_SDR11:[1.9,2.6,5.14,7.36],PE100_SDR13_6:[5.36,7.66,9.38,10.66,13.64,17.06,19.18],PE80:[1.8,2.5,4.9,7.1,8.7,9.9,12.7,15.9,17.9]};
+let lastReport=null;
+
+function escapeHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmt(n,dec){if(n===null||n===undefined||isNaN(n))return '---';return Number(n).toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec});}
+function psiGaugeToKgcm2Abs(psi){return psi*0.070307+1.033;}
+function kgcm2AbsToPsiGauge(kg){return (kg-1.033)/0.070307;}
+function peLabel(peType){return 'لوله پلی‌اتیلن '+peType;}
+
+function updatePipeImage(){
+  const type=document.getElementById('pipeType').value;
+  const img=document.getElementById('pipeImage');
+  if(type==='steel'){ img.src='images/steel-pipe.jpg'; img.style.display='block'; }
+  else if(type==='polyethylene'){ img.src='images/poly-pipe.jpg'; img.style.display='block'; }
+  else { img.src=''; img.style.display='none'; }
+  img.onerror=function(){ this.style.display='none'; };
+}
+
+document.getElementById('pipeType').addEventListener('change', ()=>{
+  const type=document.getElementById('pipeType').value;
+  const pipeSize=document.getElementById('pipeSize'); pipeSize.innerHTML='';
+  if(type==='steel'){ document.getElementById('polySelect').style.display='none'; steelSizes.forEach((s,i)=>pipeSize.innerHTML+=`<option value="${steelDiameters[i]}">${s}</option>`);}
+  else if(type==='polyethylene'){ document.getElementById('polySelect').style.display='block'; const peType=document.getElementById('peType').value||'PE100_11'; peSizes[peType].forEach((s,i)=>pipeSize.innerHTML+=`<option value="${peDiameters[peType][i]}">${s}</option>`);}
+  else document.getElementById('polySelect').style.display='none';
+  updatePipeImage();
+});
+
+document.getElementById('peType').addEventListener('change', ()=>{
+  const peType=document.getElementById('peType').value;
+  const pipeSize=document.getElementById('pipeSize'); pipeSize.innerHTML='';
+  peSizes[peType].forEach((s,i)=>pipeSize.innerHTML+=`<option value="${peDiameters[peType][i]}">${s}</option>`);
+  updatePipeImage();
+});
+
+document.getElementById('calcButton').addEventListener('click', ()=>{
+  const projectName=(document.getElementById('projectName').value||'---').trim();
+  const engineerName=(document.getElementById('engineerName').value||'---').trim();
+  const lineName=(document.getElementById('lineName').value||'---').trim();
+  const flow=parseFloat(document.getElementById('flow').value);
+  const length=parseFloat(document.getElementById('length').value);
+  const type=document.getElementById('pipeType').value;
+  const d=parseFloat(document.getElementById('pipeSize').value);
+  const pStationInput=document.getElementById('stationPressure').value;
+  const pGaugeInput=document.getElementById('inletPressure').value;
+  if(pGaugeInput===''||pStationInput===''||isNaN(flow)||isNaN(length)||!type||isNaN(d)){ alert('لطفاً همهٔ فیلدهای * دار را پر کنید.'); return; }
+  const pStation=parseFloat(pStationInput);
+  const pGauge=parseFloat(pGaugeInput);
+  const pAbs=psiGaugeToKgcm2Abs(pGauge);
+  const pStationAbs=psiGaugeToKgcm2Abs(pStation);
+
+  let p2Abs=0, formulaName='', formulaText='';
+  if(type==='steel'){ formulaName='فرمول Weymouth (وایموت)'; formulaText='P₂ = √(P₁² - ((Q / 47.07)² × L) / D^(16/3))'; const term=Math.pow((flow/47.07),2)*length/Math.pow(d,16/3); p2Abs=term<pAbs*pAbs?Math.sqrt(pAbs*pAbs-term):0; }
+  else{ formulaName='فرمول IGT'; formulaText='P₂ = √(P₁² - ((Q / (161.25 × D^2.5))² × L))'; const term=Math.pow((flow/(161.25*Math.pow(d,2.5))),2)*length; p2Abs=term<pAbs*pAbs?Math.sqrt(pAbs*pAbs-term):0; }
+
+  const p1PsiGauge=pGauge;
+  let p2PsiGauge=kgcm2AbsToPsiGauge(p2Abs); if(!isFinite(p2PsiGauge)||isNaN(p2PsiGauge))p2PsiGauge=0;
+  const deltaPpercent=pAbs>0?((pAbs-p2Abs)/pAbs)*100:0;
+  const deltaPStationPercent=pStationAbs>0?((pStationAbs-p2Abs)/pStationAbs)*100:0;
+  const speed=(3.65*flow)/(pAbs*Math.pow(d,2));
+  const isOk=deltaPpercent<10 && deltaPStationPercent<10 && speed<20;
+  let pipeLabelForDisplay=type==='steel'?'لوله فولادی رده 40':peLabel(document.getElementById('peType').value||'PE100_11');
+  const pipeSizeText = document.getElementById('pipeSize').selectedOptions[0]?.text || '---';
+
+  const resultsHtml=`
+      <div><strong>نام پروژه:</strong> ${escapeHtml(projectName)}</div>
+      <div><strong>نام خط:</strong> ${escapeHtml(lineName)}</div>
+      <div><strong>جنس لوله:</strong> ${escapeHtml(pipeLabelForDisplay)} (${escapeHtml(pipeSizeText)})</div>
+      <hr style="margin:8px 0;">
+      <div><strong>فشار خروجی ایستگاه:</strong> ${fmt(pStation,2)} PSI</div>
+      <div><strong>فشار ورودی خط (P₁):</strong> ${fmt(p1PsiGauge,2)} PSI</div>
+      <div><strong>فشار خروجی خط (P₂):</strong> ${fmt(p2PsiGauge,2)} PSI</div>
+      <div><strong>افت فشار خط نسبت به P₁ :</strong> ${fmt(deltaPpercent,1)}٪</div>
+      <div><strong>افت فشار شبکه نسبت به ایستگاه:</strong> ${fmt(deltaPStationPercent,1)}٪</div>
+      <div><strong>سرعت:</strong> ${fmt(speed,2)} m/s</div>
+      <div><strong>وضعیت:</strong> ${isOk?'✅ مناسب':'❌ نامناسب'}</div>`;
+
+  document.getElementById('formula').style.display='block';
+  document.getElementById('results').style.display='block';
+  document.getElementById('formula').innerHTML=`<strong>${escapeHtml(formulaName)}</strong><br>${escapeHtml(formulaText)}`;
+  document.getElementById('results').innerHTML=resultsHtml;
+
+  lastReport={projectName, engineerName, lineName, pipeLabelForDisplay, pipeSizeText, formulaName, formulaText, p1PsiGauge, p2PsiGauge, deltaPpercent, deltaPStationPercent, speed, isOk, pStation};
+});
+
+// چاپ
+document.getElementById('printButton').addEventListener('click', ()=>{
+  if(!lastReport){ alert('ابتدا محاسبه را انجام دهید.'); return; }
+  const r=lastReport;
+  const box=document.createElement('div');
+  box.style.direction='rtl'; box.style.fontFamily='Vazirmatn, Tahoma, sans-serif'; box.style.padding='20px';
+  box.innerHTML=`<div style="border:2px solid #000; border-radius:10px; padding:18px; max-width:780px; margin:auto;">
+    <div style="text-align:center; font-weight:600; font-size:1.15rem; margin-bottom:12px;">گزارش محاسبه خط گاز</div>
+    <div style="text-align:center; margin-bottom:12px;"><strong>نام پروژه:</strong> ${escapeHtml(r.projectName)} &nbsp; | &nbsp; <strong>نام خط:</strong> ${escapeHtml(r.lineName)}</div>
+    <div style="background:#f2f2f2; border:1px dashed #777; padding:10px; margin-bottom:12px; font-family:monospace;"><strong>${escapeHtml(r.formulaName)}</strong><br>${escapeHtml(r.formulaText)}</div>
+    <div style="font-size:1rem; line-height:1.7;">
+      <div><strong>جنس لوله:</strong> ${escapeHtml(r.pipeLabelForDisplay)} (${escapeHtml(r.pipeSizeText)})</div>
+      <div><strong>فشار خروجی ایستگاه:</strong> ${fmt(r.pStation,2)} PSI</div>
+      <div><strong>فشار ورودی خط (P₁):</strong> ${fmt(r.p1PsiGauge,2)} PSI</div>
+      <div><strong>فشار خروجی خط (P₂):</strong> ${fmt(r.p2PsiGauge,2)} PSI</div>
+      <div><strong>افت فشار خط نسبت به P₁ :</strong> ${fmt(r.deltaPpercent,1)}٪</div>
+      <div><strong>افت فشار شبکه نسبت به ایستگاه:</strong> ${fmt(r.deltaPStationPercent,1)}٪</div>
+      <div><strong>سرعت:</strong> ${fmt(r.speed,2)} m/s</div>
+      <div><strong>وضعیت:</strong> ${r.isOk?'✅ مناسب':'❌ نامناسب'}</div>
+    </div>
+    <div style="margin-top:16px; text-align:center; font-size:0.95rem;">مهندس طراح: ${escapeHtml(r.engineerName||'---')}</div>
+  </div>`;
+  const w=window.open('','_blank');
+  w.document.write('<!doctype html><html lang="fa"><head><meta charset="utf-8"><title>گزارش محاسبه</title></head><body>'+box.innerHTML+'</body></html>');
+  w.document.close(); w.focus(); setTimeout(()=>{w.print();},250);
+});
+
+// PDF
+document.getElementById('pdfButton').addEventListener('click', ()=>{
+  if(!lastReport){ alert('ابتدا محاسبه را انجام دهید.'); return; }
+  const r=lastReport;
+  const reportEl=document.createElement('div');
+  reportEl.style.direction='rtl'; reportEl.style.fontFamily='Vazirmatn, Tahoma, sans-serif'; reportEl.style.padding='20px';
+  reportEl.innerHTML=`<div style="border:2px solid #000; border-radius:10px; padding:18px; max-width:780px; margin:auto;">
+    <div style="text-align:center; font-weight:600; font-size:1.15rem; margin-bottom:12px;">گزارش محاسبه خط گاز</div>
+    <div style="text-align:center; margin-bottom:12px;"><strong>نام پروژه:</strong> ${escapeHtml(r.projectName)} &nbsp; | &nbsp; <strong>نام خط:</strong> ${escapeHtml(r.lineName)}</div>
+    <div style="background:#f2f2f2; border:1px dashed #777; padding:10px; margin-bottom:12px; font-family:monospace;"><strong>${escapeHtml(r.formulaName)}</strong><br>${escapeHtml(r.formulaText)}</div>
+    <div style="font-size:1rem; line-height:1.7;">
+      <div><strong>جنس لوله:</strong> ${escapeHtml(r.pipeLabelForDisplay)} (${escapeHtml(r.pipeSizeText)})</div>
+      <div><strong>فشار خروجی ایستگاه:</strong> ${fmt(r.pStation,2)} PSI</div>
+      <div><strong>فشار ورودی خط (P₁):</strong> ${fmt(r.p1PsiGauge,2)} PSI</div>
+      <div><strong>فشار خروجی خط (P₂):</strong> ${fmt(r.p2PsiGauge,2)} PSI</div>
+      <div><strong>افت فشار نسبت به P₁:</strong> ${fmt(r.deltaPpercent,1)}٪</div>
+      <div><strong>افت فشار نسبت به ایستگاه:</strong> ${fmt(r.deltaPStationPercent,1)}٪</div>
+      <div><strong>سرعت:</strong> ${fmt(r.speed,2)} m/s</div>
+      <div><strong>وضعیت:</strong> ${r.isOk?'✅ مناسب':'❌ نامناسب'}</div>
+    </div>
+    <div style="margin-top:16px; text-align:center; font-size:0.95rem;">مهندس طراح: ${escapeHtml(r.engineerName||'---')}</div>
+  </div>`;
+  document.body.appendChild(reportEl);
+  setTimeout(()=>{
+    html2pdf().set({
+      margin:0.5,
+      filename:`GasLineReport.pdf`,
+      jsPDF:{unit:'in', format:'a4', orientation:'portrait'}
+    }).from(reportEl).save().finally(()=>{document.body.removeChild(reportEl);});
+  },200);
+});
+</script>
+</body>
+</html>
